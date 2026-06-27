@@ -1,0 +1,17 @@
+# Rust / Tauri 編譯產物
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
+# 建置記錄
+/src-tauri/build*.log
+
+# Visual Studio
+/.vs/
+
+# 產出樣本（輸出的銷貨單／請款單）
+/銷貨單_*.xlsx
+/請款單_*.xlsx
+
+# OS
+Thumbs.db
+Desktop.ini

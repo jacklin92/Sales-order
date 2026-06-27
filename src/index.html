@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>通用銷貨明細系統</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="print.css" media="print" />
+  <style id="pageStyle"></style>
+</head>
+<body>
+  <div id="app" class="no-print">
+    <div class="apphead">
+      <h1>通用銷貨明細系統</h1>
+      <button onclick="showHelp()">使用說明</button>
+    </div>
+
+    <section class="card">
+      <h2>單據資訊</h2>
+      <div class="grid">
+        <label>銷貨單號 <span class="req">*</span>
+          <input id="orderNo" /><span class="err" id="err-orderNo"></span></label>
+        <label>銷貨日期 <span class="req">*</span>
+          <input id="orderDate" type="date" /><span class="err" id="err-orderDate"></span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>我方（出貨方）資訊（單次設定）</h2>
+      <div class="grid">
+        <label>我方寶號 <span class="req">*</span>
+          <input id="myCompany" /><span class="err" id="err-myCompany"></span></label>
+        <label>我方電話 <input id="myPhone" /><span class="err"></span></label>
+        <label>我方傳真 <input id="myFax" /><span class="err"></span></label>
+        <label class="wide">我方地址 <input id="myAddress" /><span class="err"></span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>客戶（到貨方）資訊</h2>
+      <div class="grid">
+        <label>客戶名稱 <span class="req">*</span>
+          <input id="custName" /><span class="err" id="err-custName"></span></label>
+        <label>客戶統一編號 <input id="custTaxId" /><span class="err"></span></label>
+        <label>聯絡人 <input id="custContact" /><span class="err"></span></label>
+        <label>業務員 <input id="custSales" /><span class="err"></span></label>
+        <label>客戶電話 <input id="custPhone" /><span class="err"></span></label>
+        <label class="wide">送貨地址 <input id="custShipAddr" /><span class="err"></span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row-head">
+        <h2>銷貨明細</h2>
+        <span>
+          <button onclick="addRow()">＋ 新增一項</button>
+          <button onclick="editList('items')">編輯品項</button>
+          <button onclick="editList('units')">編輯單位</button>
+        </span>
+      </div>
+      <span class="err" id="err-rows"></span>
+      <table id="grid">
+        <thead>
+          <tr><th>序號</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+        <tfoot>
+          <tr><td colspan="5" class="right">銷貨總額</td><td class="right" id="sumAmount">0</td><td></td></tr>
+          <tr><td colspan="5" class="right">營業稅 5%</td><td class="right" id="sumTax">0</td><td></td></tr>
+          <tr><td colspan="5" class="right">總計</td><td class="right" id="sumTotal">0</td><td></td></tr>
+        </tfoot>
+      </table>
+    </section>
+
+    <div class="actions">
+      <button onclick="loadFile()">載入舊檔</button>
+      <button class="primary" onclick="save()">輸出銷貨單</button>
+      <button class="primary" onclick="saveInvoice()">輸出請款單</button>
+      <span class="print-ctl">
+        紙張
+        <select id="paperSize"><option>A5</option><option>A4</option></select>
+        方向
+        <select id="paperOrient">
+          <option value="landscape">橫式</option>
+          <option value="portrait">直式</option>
+        </select>
+        <button onclick="printDoc()">列印</button>
+      </span>
+    </div>
+
+    <section class="card">
+      <h2>歷史輸出檔（點檔名直接開啟）</h2>
+      <table id="historyTable">
+        <thead><tr><th>檔名</th><th>輸出時間</th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div id="helpModal" class="modal no-print">
+    <div class="modal-box wide">
+      <h3>使用說明</h3>
+      <ol class="help">
+        <li><b>我方資訊</b>：填寶號、電話、傳真、地址，設定一次即可，輸出後會自動記住，下次開啟自動帶入。</li>
+        <li><b>客戶資訊</b>：填客戶名稱（必填）、電話、送貨地址、業務員（會印為「經辦人」）。</li>
+        <li><b>新增明細</b>：按「＋ 新增一項」。序號自動編；品名、單位為下拉選單。</li>
+        <li><b>維護清單</b>：按「編輯品項／編輯單位」可新增或刪除下拉內容（每行一項，儲存即生效）。</li>
+        <li><b>填數量單價</b>：可用鍵盤 <b>Tab</b> 逐格往右／往下移動。小計、營業稅（5%）、總計即時自動計算。</li>
+        <li><b>單號</b>：自動依「存檔資料夾」內的現有檔案分型別（銷貨單／請款單）編號，刪掉某號會自動補回該空號。</li>
+        <li><b>輸出</b>：按「輸出銷貨單」或「輸出請款單」，選存檔位置（會記住上次資料夾）。兩種單號各自獨立。</li>
+        <li><b>載入舊檔</b>：選先前輸出的 xlsx，自動還原表頭與明細，可續編後再輸出。</li>
+        <li><b>列印</b>：右下選紙張與方向（預設橫式），按「列印」。</li>
+        <li><b>歷史輸出</b>：點清單中的檔名，直接以 Excel 開啟該檔。</li>
+      </ol>
+      <div class="modal-act"><button class="primary" onclick="closeHelp()">關閉</button></div>
+    </div>
+  </div>
+
+  <div id="listModal" class="modal no-print">
+    <div class="modal-box">
+      <h3 id="listTitle"></h3>
+      <textarea id="listText" rows="12"></textarea>
+      <div class="modal-act">
+        <button class="primary" onclick="saveList()">儲存</button>
+        <button onclick="closeList()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="printArea" class="print-only"></div>
+
+  <script src="main.js"></script>
+</body>
+</html>

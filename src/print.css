@@ -1,0 +1,35 @@
+/* 請款單列印版面（仿 Example，@page 由 main.js 依選單動態注入 #pageStyle）*/
+.no-print { display: none !important; }
+.print-only { display: block !important; }
+
+#printArea { font-family: "標楷體", "DFKai-SB", "PMingLiU", serif; color: #000; }
+.doc { font-size: 12px; }
+
+.doc-head { display: flex; align-items: flex-end; justify-content: space-between; }
+.doc-cust { font-size: 9px; align-self: flex-start; }
+.doc-company { font-size: 22px; font-weight: bold; letter-spacing: 2px; }
+.doc-meta { font-size: 10px; text-align: right; }
+.doc-title { font-size: 16px; text-align: center; margin: 2px 0 6px; letter-spacing: 6px; border-bottom: 3px double #000; width: 120px; }
+
+.doc-info { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+.doc-info td { padding: 3px 6px; width: 50%; }
+.doc-info tr:last-child td { border-bottom: 1px solid #000; }
+
+.doc-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.doc-table th, .doc-table td { border: 1px solid #000; padding: 4px 5px; text-align: center; height: 24px; }
+.doc-table th { background: #f0f0f0; }
+.doc-table .nm { text-align: left; }
+.doc-table .right { text-align: right; }
+/* 欄寬比例：項目編號 / 品名規格(寬) / 數量 / 單價 / 小計(寬) / 備註 */
+.doc-table th:nth-child(1), .doc-table td:nth-child(1) { width: 8%; }
+.doc-table th:nth-child(2), .doc-table td:nth-child(2) { width: 32%; }
+.doc-table th:nth-child(3), .doc-table td:nth-child(3) { width: 10%; }
+.doc-table th:nth-child(4), .doc-table td:nth-child(4) { width: 12%; }
+.doc-table th:nth-child(5), .doc-table td:nth-child(5) { width: 24%; }
+.doc-table th:nth-child(6), .doc-table td:nth-child(6) { width: 14%; }
+
+.doc-total { width: 100%; border-collapse: collapse; }
+.doc-total td { border: 1px solid #000; padding: 4px 6px; }
+.doc-total td:last-child { border: 2px solid #000; font-weight: bold; }
+
+.doc-note { font-size: 8px; border: 1px solid #000; border-top: none; padding: 3px 6px; text-align: center; }
