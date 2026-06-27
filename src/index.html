@@ -11,7 +11,10 @@
   <div id="app" class="no-print">
     <div class="apphead">
       <h1>通用銷貨明細系統</h1>
-      <button onclick="showHelp()">使用說明</button>
+      <span>
+        <button onclick="openTheme()">外觀</button>
+        <button onclick="showHelp()">使用說明</button>
+      </span>
     </div>
 
     <section class="card">
@@ -94,6 +97,17 @@
         <tbody id="history"></tbody>
       </table>
     </section>
+  </div>
+
+  <div id="themeModal" class="modal no-print">
+    <div class="modal-box">
+      <h3>外觀設定（顏色即時套用並記憶）</h3>
+      <div id="themeRows"></div>
+      <div class="modal-act">
+        <button onclick="resetTheme()">還原預設</button>
+        <button class="primary" onclick="closeTheme()">完成</button>
+      </div>
+    </div>
   </div>
 
   <div id="helpModal" class="modal no-print">

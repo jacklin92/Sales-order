@@ -115,6 +115,42 @@ function closeList() { document.getElementById('listModal').style.display = 'non
 function showHelp() { document.getElementById('helpModal').style.display = 'flex'; }
 function closeHelp() { document.getElementById('helpModal').style.display = 'none'; }
 
+// ---- 外觀自訂（各區塊顏色，localStorage 記憶）----
+const THEME_VARS = [
+  { v: '--bg', label: '背景', def: '#05080d' },
+  { v: '--panel', label: '區塊底色', def: '#28323f' },
+  { v: '--panel-edge', label: '區塊邊框', def: '#5a6b82' },
+  { v: '--field-bg', label: '輸入框底色', def: '#ffffff' },
+  { v: '--field-edge', label: '輸入框邊框', def: '#0b1220' },
+  { v: '--txt', label: '文字', def: '#f4f7fb' },
+  { v: '--accent', label: '重點色', def: '#2dd4ee' },
+];
+function getTheme() { const v = localStorage.getItem('theme'); return v ? JSON.parse(v) : {}; }
+function applyTheme() {
+  const t = getTheme();
+  THEME_VARS.forEach(d => document.documentElement.style.setProperty(d.v, t[d.v] || d.def));
+}
+function openTheme() {
+  const t = getTheme();
+  document.getElementById('themeRows').innerHTML = THEME_VARS.map(d => {
+    const val = t[d.v] || d.def;
+    return `<label class="theme-row"><span>${d.label}</span>
+      <input type="color" value="${val}" oninput="setVar('${d.v}',this)"><code>${val}</code></label>`;
+  }).join('');
+  document.getElementById('themeModal').style.display = 'flex';
+}
+function setVar(name, el) {
+  document.documentElement.style.setProperty(name, el.value);
+  const t = getTheme(); t[name] = el.value; localStorage.setItem('theme', JSON.stringify(t));
+  el.nextElementSibling.textContent = el.value;
+}
+function resetTheme() {
+  localStorage.removeItem('theme');
+  THEME_VARS.forEach(d => document.documentElement.style.setProperty(d.v, d.def));
+  openTheme();
+}
+function closeTheme() { document.getElementById('themeModal').style.display = 'none'; }
+
 // ---- 驗證 ----
 function validate(header, rows) {
   const errs = {};
@@ -239,6 +275,7 @@ function today() {
 }
 
 // 啟動
+applyTheme();
 document.getElementById('orderDate').value = today();
 loadMyInfo();
 addRow();
