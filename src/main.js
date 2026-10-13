@@ -2,6 +2,7 @@ const { invoke } = window.__TAURI__.core;
 const dialog = window.__TAURI__.dialog;
 
 const TAX_RATE = 0.05;
+const MAX_ROWS = 7; // 版面固定 7 列明細
 const DISCLAIMER = '※ 貸款未付清或票據未兌現償清之前，貨物之所有權仍歸屬本公司所有，買受人無異議，同意本公司無需經法律程序隨時可取回本貨品或代物清償。';
 
 const HEADER_IDS = [
@@ -76,8 +77,8 @@ function calcSub(r) { return (Number(r.qty) || 0) * (Number(r.price) || 0); }
 function optionHtml(list, cur) {
   const opts = ['<option value=""></option>'];
   let found = false;
-  list.forEach(v => { if (v === cur) found = true; opts.push(`<option${v === cur ? ' selected' : ''}>${v}</option>`); });
-  if (cur && !found) opts.unshift(`<option selected>${cur}</option>`);
+  list.forEach(v => { if (v === cur) found = true; opts.push(`<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(v)}</option>`); });
+  if (cur && !found) opts.unshift(`<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
   return opts.join('');
 }
 
@@ -183,7 +184,8 @@ function validate(header, rows) {
   const errs = {};
   for (const k of Object.keys(REQUIRED)) if (!header[k]) errs[k] = '此項必填';
   if (rows.length === 0) errs.rows = '至少需新增一項明細';
-  rows.forEach((r, i) => {
+  if (rows.length > MAX_ROWS) errs.rows = `明細最多 ${MAX_ROWS} 筆（版面固定 ${MAX_ROWS} 列），請刪除 ${rows.length - MAX_ROWS} 筆`;
+  rows.slice(0, MAX_ROWS).forEach((r, i) => {
     if (!r.name?.trim() || !(Number(r.qty) > 0) || !(Number(r.price) >= 0))
       errs.rows = `第 ${i + 1} 列：品名、數量、單價為必填`;
   });
@@ -197,6 +199,10 @@ function showErrors(errs) {
 
 // ---- 後端互動 ----
 async function exportExcel(cmd, label) {
+  if (stampPath) {
+    await loadStamp(); // 檔案已被移走時會清除設定
+    if (!stampPath) alert('找不到公司章圖檔，本次輸出不含公司章，請重新選擇圖檔');
+  }
   const header = headerData();
   // 依類型自動編號（分開計號、補空號）
   header.orderNo = await computeOrderNo(label);
@@ -253,6 +259,7 @@ async function loadHistory() {
 // ---- 列印（照 Example 版面，預設橫式）----
 function toMinguo(s) { const p = (s || '').split('-'); return p.length === 3 ? `${parseInt(p[0], 10) - 1911}/${p[1]}/${p[2]}` : s; }
 function printDoc() {
+  if (rows.length > MAX_ROWS) { alert(`明細最多 ${MAX_ROWS} 筆（版面固定 ${MAX_ROWS} 列），請先刪除多餘項目`); return; }
   const h = headerData();
   const size = document.getElementById('paperSize').value;
   const orient = document.getElementById('paperOrient').value;
@@ -261,8 +268,8 @@ function printDoc() {
   const amount = rows.reduce((s, r) => s + calcSub(r), 0);
   const tax = taxOf(amount);
   const taxLabel = { zero: '零稅率', exempt: '免稅' }[h.taxType] || '營業稅';
-  const padded = rows.slice(0, 7);
-  while (padded.length < 7) padded.push(null);
+  const padded = rows.slice(0, MAX_ROWS);
+  while (padded.length < MAX_ROWS) padded.push(null);
   // 備註欄：第 1~5 列合併放備註，第 6 列「客戶簽收」，第 7 列空白
   const noteCell = i => i === 0 ? `<td rowspan="5" class="remark">${esc(h.remark)}</td>` : i < 5 ? '' : i === 5 ? '<td>客戶簽收</td>' : '<td></td>';
   const body = padded.map((r, i) => {
@@ -275,21 +282,21 @@ function printDoc() {
     <div class="doc">
       <div class="doc-head">
         <span class="doc-cust">客戶編號：</span>
-        <span class="doc-company">${h.myCompany}</span>
-        <span class="doc-meta">${h.myAddress}<br>TEL:${h.myPhone} FAX:${h.myFax}</span>
+        <span class="doc-company">${esc(h.myCompany)}</span>
+        <span class="doc-meta">${esc(h.myAddress)}<br>TEL:${esc(h.myPhone)} FAX:${esc(h.myFax)}</span>
       </div>
       <div class="doc-title">請款單</div>
       <table class="doc-info">
-        <tr><td>客戶名稱：${h.custName}</td><td>出貨日期：${toMinguo(h.orderDate)}</td></tr>
-        <tr><td>電　　話：${h.custPhone}</td><td>貨單編號：${h.orderNo}</td></tr>
-        <tr><td>地　　址：${h.custShipAddr}</td><td>收訖摘要：</td></tr>
+        <tr><td>客戶名稱：${esc(h.custName)}</td><td>出貨日期：${toMinguo(h.orderDate)}</td></tr>
+        <tr><td>電　　話：${esc(h.custPhone)}</td><td>貨單編號：${esc(h.orderNo)}</td></tr>
+        <tr><td>地　　址：${esc(h.custShipAddr)}</td><td>收訖摘要：</td></tr>
       </table>
       <table class="doc-table">
         <thead><tr><th>項目編號</th><th>品名規格</th><th>數量</th><th>單價</th><th>小計</th><th>備註</th></tr></thead>
         <tbody>${body}</tbody>
       </table>
       <table class="doc-total">
-        <tr><td>經辦人：${h.custSales}</td><td>銷貨總額 ${fmt(amount)}</td>
+        <tr><td>經辦人：${esc(h.custSales)}</td><td>銷貨總額 ${fmt(amount)}</td>
           <td>${taxLabel} ${fmt(tax)}</td><td>總計 ${fmt(amount + tax)}</td></tr>
       </table>
       <div class="doc-note">${DISCLAIMER}</div>
