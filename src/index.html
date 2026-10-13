@@ -35,6 +35,12 @@
         <label>我方電話 <input id="myPhone" /><span class="err"></span></label>
         <label>我方傳真 <input id="myFax" /><span class="err"></span></label>
         <label class="wide">我方地址 <input id="myAddress" /><span class="err"></span></label>
+        <div class="wide stamp-row">
+          公司章
+          <button onclick="pickStamp()">選擇圖檔</button>
+          <button onclick="clearStamp()">清除</button>
+          <img id="stampPreview" alt="" />
+        </div>
       </div>
     </section>
 
@@ -58,20 +64,27 @@
           <button onclick="addRow()">＋ 新增一項</button>
           <button onclick="editList('items')">編輯品項</button>
           <button onclick="editList('units')">編輯單位</button>
+          <button onclick="editList('sizeUnits')">編輯尺寸單位</button>
         </span>
       </div>
       <span class="err" id="err-rows"></span>
       <table id="grid">
         <thead>
-          <tr><th>序號</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th></th></tr>
+          <tr><th>序號</th><th>品名</th><th>尺寸</th><th>尺寸單位</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th></th></tr>
         </thead>
         <tbody id="rows"></tbody>
         <tfoot>
-          <tr><td colspan="5" class="right">銷貨總額</td><td class="right" id="sumAmount">0</td><td></td></tr>
-          <tr><td colspan="5" class="right">營業稅 5%</td><td class="right" id="sumTax">0</td><td></td></tr>
-          <tr><td colspan="5" class="right">總計</td><td class="right" id="sumTotal">0</td><td></td></tr>
+          <tr><td colspan="7" class="right">銷貨總額</td><td class="right" id="sumAmount">0</td><td></td></tr>
+          <tr><td colspan="7" class="right">營業稅 <select id="taxType" onchange="recalc()"><option value="taxable">應稅（5%）</option><option value="zero">零稅率</option><option value="exempt">免稅</option></select></td><td class="right" id="sumTax">0</td><td></td></tr>
+          <tr><td colspan="7" class="right">總計</td><td class="right" id="sumTotal">0</td><td></td></tr>
         </tfoot>
       </table>
+      <datalist id="itemsDL"></datalist>
+    </section>
+
+    <section class="card">
+      <h2>備註</h2>
+      <textarea id="remark" rows="3" class="full" placeholder="印在明細右側備註欄，可換行"></textarea>
     </section>
 
     <div class="actions">
@@ -117,7 +130,10 @@
         <li><b>我方資訊</b>：填寶號、電話、傳真、地址，設定一次即可，輸出後會自動記住，下次開啟自動帶入。</li>
         <li><b>客戶資訊</b>：填客戶名稱（必填）、電話、送貨地址、業務員（會印為「經辦人」）。</li>
         <li><b>新增明細</b>：按「＋ 新增一項」。序號自動編；品名、單位為下拉選單。</li>
+        <li><b>品名／尺寸</b>：品名可從下拉選取，也可直接輸入自訂品名；尺寸（如 50*260）可選尺寸單位（cm、mm 等，可按「編輯尺寸單位」自訂），會接在品名後輸出。</li>
+        <li><b>備註與公司章</b>：備註印在明細右側備註欄；公司章選圖檔後會記住，輸出 Excel 與列印時加在右下角。</li>
         <li><b>維護清單</b>：按「編輯品項／編輯單位」可新增或刪除下拉內容（每行一項，儲存即生效）。</li>
+        <li><b>稅別</b>：明細下方「營業稅」可選應稅（5%）、零稅率、免稅；後兩者稅額為 0，Excel 與列印的稅額欄標籤會同步改為「零稅率」或「免稅」。</li>
         <li><b>填數量單價</b>：可用鍵盤 <b>Tab</b> 逐格往右／往下移動。小計、營業稅（5%）、總計即時自動計算。</li>
         <li><b>單號</b>：自動依「存檔資料夾」內的現有檔案分型別（銷貨單／請款單）編號，刪掉某號會自動補回該空號。</li>
         <li><b>輸出</b>：按「輸出銷貨單」或「輸出請款單」，選存檔位置（會記住上次資料夾）。兩種單號各自獨立。</li>

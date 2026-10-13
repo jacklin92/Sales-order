@@ -110,3 +110,8 @@ button.primary:hover { background: #67e8f9; color: #042029; }
 .theme-row span { flex: 1; }
 .theme-row input[type="color"] { width: 48px; height: 32px; padding: 2px; border: 2px solid var(--field-edge); background: #fff; }
 .theme-row code { width: 76px; text-align: right; color: var(--muted); }
+
+/* 公司章、備註 */
+.stamp-row { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 700; color: var(--muted); }
+#stampPreview { height: 48px; background: #fff; border-radius: 3px; display: none; }
+textarea.full { width: 100%; resize: vertical; }

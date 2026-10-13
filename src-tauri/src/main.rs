@@ -23,6 +23,12 @@ struct Header {
     cust_sales: String,
     cust_phone: String,
     cust_ship_addr: String,
+    #[serde(default)]
+    remark: String,
+    #[serde(default)]
+    stamp: String, // 公司章圖檔路徑，空字串表示不加
+    #[serde(default)]
+    tax_type: String, // taxable 應稅5% / zero 零稅率 / exempt 免稅；空值視為應稅
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -30,6 +36,10 @@ struct Header {
 struct Row {
     name: String,
     unit: String,
+    #[serde(default)]
+    size: String, // 尺寸，輸出時接在品名後
+    #[serde(default)]
+    size_unit: String,
     qty: f64,
     price: f64,
 }
@@ -57,6 +67,7 @@ fn fontset(sheet: &mut umya::Worksheet, coord: (u32, u32), name: &str, size: f64
     let f = sheet.get_cell_mut(coord).get_style_mut().get_font_mut();
     f.set_name(name);
     f.set_size(size);
+    f.get_color_mut().set_argb("FF000000");
 }
 // side: t/b/l/r；style 用 Border::BORDER_* 常數
 fn edge(sheet: &mut umya::Worksheet, coord: (u32, u32), side: &str, style: &str) {
@@ -191,14 +202,17 @@ fn write_form(title: &str, header: &Header, rows: &[Row], path: &str) -> Result<
         center(sheet, (7, n));
         fontset(sheet, (8, n), F_BODY, 12.0);
         center(sheet, (8, n));
-        sheet.add_merge_cells(format!("I{n}:J{n}"));
+        if n > 12 {
+            sheet.add_merge_cells(format!("I{n}:J{n}"));
+        }
         fontset(sheet, (9, n), F_KAI, 12.0);
         left_mid(sheet, (9, n));
         if let Some(r) = rows.get(i) {
             let sub = r.qty * r.price;
             amount += sub;
             sheet.get_cell_mut((2u32, n)).set_value_number((i + 1) as f64);
-            set_s(sheet, (3, n), &r.name);
+            let size = if r.size.trim().is_empty() { String::new() } else { format!("{}{}", r.size, r.size_unit) };
+            set_s(sheet, (3, n), &format!("{}{}", r.name, size));
             let qty = if r.unit.trim().is_empty() {
                 num_int(r.qty)
             } else {
@@ -210,14 +224,25 @@ fn write_form(title: &str, header: &Header, rows: &[Row], path: &str) -> Result<
         }
         border_range(sheet, 2, n, 10, n);
     }
+    // 備註區塊（I8:J12 合併、自動換行）＋ 客戶簽收（第 13 列）
+    sheet.add_merge_cells("I8:J12");
+    set_s(sheet, (9, 8), &header.remark);
+    center(sheet, (9, 8));
+    sheet.get_cell_mut((9u32, 8u32)).get_style_mut().get_alignment_mut().set_wrap_text(true);
+    set_s(sheet, (9, 13), "客戶簽收");
+    center(sheet, (9, 13));
     // 末列（14）備註底中線
     edge(sheet, (9, 14), "b", Border::BORDER_MEDIUM);
     edge(sheet, (10, 14), "b", Border::BORDER_MEDIUM);
 
     // 合計列（第 15 列）：整單一次營業稅 5%
-    let tax = (amount * 0.05).round();
+    let (tax_label, tax) = match header.tax_type.as_str() {
+        "zero" => ("零稅率", 0.0),
+        "exempt" => ("免稅", 0.0),
+        _ => ("營業稅", (amount * 0.05).round()),
+    };
     let total = amount + tax;
-    for (c, t) in [(2u32, "經辦人"), (4, "銷貨總額"), (6, "營業稅"), (8, "總計")] {
+    for (c, t) in [(2u32, "經辦人"), (4, "銷貨總額"), (6, tax_label), (8, "總計")] {
         set_s(sheet, (c, 15), t);
     }
     set_s(sheet, (3, 15), &header.cust_sales);
@@ -243,6 +268,23 @@ fn write_form(title: &str, header: &Header, rows: &[Row], path: &str) -> Result<
     center(sheet, (2, 16));
     sheet.add_merge_cells("B16:J16");
     border_range(sheet, 2, 16, 10, 16);
+
+    // 公司章：第 17 列 I 欄起，長邊縮到 120px 內並保持比例
+    if !header.stamp.trim().is_empty() {
+        let bytes = std::fs::read(&header.stamp).map_err(|e| format!("讀取公司章失敗：{e}"))?;
+        let dim = imagesize::blob_size(&bytes).map_err(|e| format!("公司章圖檔格式不支援：{e}"))?;
+        let k = (120.0 / dim.width.max(dim.height) as f64).min(1.0);
+        let (w, h) = ((dim.width as f64 * k) as u32, (dim.height as f64 * k) as u32);
+        let name = std::path::Path::new(&header.stamp)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("stamp.png");
+        let mut marker = umya::structs::drawing::spreadsheet::MarkerType::default();
+        marker.set_coordinate("I17");
+        let mut img = umya::structs::Image::default();
+        img.new_image_with_dimensions(h, w, name, bytes, marker);
+        sheet.add_image(img);
+    }
 
     umya::writer::xlsx::write(&book, std::path::Path::new(path))
         .map_err(|e| format!("寫檔失敗（檔案可能正開在 Excel 中）：{e:?}"))
@@ -276,6 +318,14 @@ fn load_excel(path: String) -> Result<serde_json::Value, String> {
         order_date: from_minguo(&g(3, 9)),
         cust_tax_id: String::new(),
         cust_contact: String::new(),
+        remark: g(7, 8).trim().to_string(),
+        stamp: String::new(),
+        tax_type: match g(14, 5).trim() {
+            "零稅率" => "zero",
+            "免稅" => "exempt",
+            _ => "taxable",
+        }
+        .to_string(),
     };
 
     let mut rows: Vec<Row> = Vec::new();
@@ -285,7 +335,7 @@ fn load_excel(path: String) -> Result<serde_json::Value, String> {
             continue;
         }
         let (qty, unit) = split_qty(&g(idx, 5));
-        rows.push(Row { name, unit, qty, price: num(data[idx], 6) });
+        rows.push(Row { name, size: String::new(), size_unit: String::new(), unit, qty, price: num(data[idx], 6) });
     }
 
     Ok(serde_json::json!({ "header": header, "rows": rows }))
@@ -388,6 +438,12 @@ fn read_history(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String>
     Ok(out)
 }
 
+// 回傳原始位元組給前端（公司章預覽／列印）
+#[tauri::command]
+fn read_file(path: String) -> Result<tauri::ipc::Response, String> {
+    std::fs::read(path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn open_file(path: String) -> Result<(), String> {
     open::that(path).map_err(|e| e.to_string())
@@ -429,6 +485,7 @@ fn main() {
             next_seq,
             append_history,
             read_history,
+            read_file,
             open_file
         ])
         .run(tauri::generate_context!())
