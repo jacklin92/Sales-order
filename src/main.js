@@ -7,9 +7,9 @@ const DISCLAIMER = '※ 貸款未付清或票據未兌現償清之前，貨物�
 
 const HEADER_IDS = [
   'orderNo', 'orderDate', 'myCompany', 'myPhone', 'myFax', 'myAddress',
-  'custName', 'custTaxId', 'custContact', 'custSales', 'custPhone', 'custShipAddr', 'remark', 'taxType',
+  'custName', 'custTaxId', 'custContact', 'custSales', 'custPhone', 'custShipAddr', 'remark', 'taxType', 'docType', 'custAddrType', 'custNote',
 ];
-const REQUIRED = { orderNo: '銷貨單號', orderDate: '銷貨日期', myCompany: '我方寶號', custName: '客戶名稱' };
+const REQUIRED = { orderNo: '單據編號', orderDate: '銷貨日期', myCompany: '我方寶號', custName: '客戶名稱' };
 const MY_IDS = ['myCompany', 'myPhone', 'myFax', 'myAddress'];
 
 // 下拉清單（localStorage 記憶，可按鈕編輯）
@@ -91,7 +91,7 @@ function render() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="right">${i + 1}</td>
-      <td><input list="itemsDL" value="${esc(r.name)}" oninput="upd(${i},'name',this.value)"></td>
+      <td><input class="nm-in" list="itemsDL" value="${esc(r.name)}" oninput="upd(${i},'name',this.value)"></td>
       <td><input class="size" value="${esc(r.size)}" oninput="upd(${i},'size',this.value)"></td>
       <td><select class="narrow" onchange="upd(${i},'sizeUnit',this.value)">${optionHtml(sizeUnits, r.sizeUnit)}</select></td>
       <td><select class="narrow" onchange="upd(${i},'unit',this.value)">${optionHtml(units, r.unit)}</select></td>
@@ -198,21 +198,37 @@ function showErrors(errs) {
 }
 
 // ---- 後端互動 ----
-async function exportExcel(cmd, label) {
+// 檔名：{類型}_{單號}[-客戶註記]（註記中檔名不可用的字元換成底線）
+function fileStem(h) {
+  const note = (h.custNote || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+  return `${h.docType}_${h.orderNo}${note ? '-' + note : ''}`;
+}
+function refreshOrderNo() { computeOrderNo(val('docType')).then(no => (document.getElementById('orderNo').value = no)); }
+
+async function saveDoc() {
   if (stampPath) {
     await loadStamp(); // 檔案已被移走時會清除設定
     if (!stampPath) alert('找不到公司章圖檔，本次輸出不含公司章，請重新選擇圖檔');
   }
   const header = headerData();
-  // 依類型自動編號（分開計號、補空號）
-  header.orderNo = await computeOrderNo(label);
+  // 依單據類型自動編號（分開計號、補空號）
+  header.orderNo = await computeOrderNo(header.docType);
   document.getElementById('orderNo').value = header.orderNo;
   const errs = validate(header, rows);
   showErrors(errs);
   if (Object.keys(errs).length) return;
 
+  if (document.getElementById('outFormat').value === 'pdf') {
+    // PDF：呼叫系統列印，印表機選「Microsoft Print to PDF」；WebView2 以網頁標題作預設檔名
+    const old = document.title;
+    document.title = fileStem(header);
+    window.addEventListener('afterprint', () => (document.title = old), { once: true });
+    printDoc();
+    return;
+  }
+
   const dir = localStorage.getItem('saveDir') || '';
-  const fname = `${label}_${header.orderNo}.xlsx`;
+  const fname = `${fileStem(header)}.xlsx`;
   const path = await dialog.save({
     defaultPath: dir ? dir + '\\' + fname : fname,
     filters: [{ name: 'Excel', extensions: ['xlsx'] }],
@@ -220,41 +236,57 @@ async function exportExcel(cmd, label) {
   if (!path) return;
 
   try {
-    await invoke(cmd, { header, rows, path });
+    await invoke('save_form', { header, rows, path });
     saveMyInfo();
     localStorage.setItem('saveDir', path.replace(/[\\/][^\\/]*$/, '')); // 記住此次資料夾
     const file = path.split(/[\\/]/).pop();
     await invoke('append_history', { file, path });
     await loadHistory();
-    document.getElementById('orderNo').value = await computeOrderNo(label); // 顯示下一個可用號
+    refreshOrderNo(); // 顯示下一個可用號
     alert('已輸出：' + file);
   } catch (e) { alert('輸出失敗：' + e); }
 }
-const save = () => exportExcel('save_excel', '銷貨單');
-const saveInvoice = () => exportExcel('save_invoice', '請款單');
 
 async function loadFile() {
-  const path = await dialog.open({ filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }] });
+  const path = await dialog.open({ filters: [
+    { name: 'Excel 或 PDF', extensions: ['xlsx', 'xls', 'pdf'] },
+    { name: 'Excel', extensions: ['xlsx', 'xls'] },
+    { name: 'PDF', extensions: ['pdf'] },
+  ] });
   if (!path) return;
+  if (/\.pdf$/i.test(path)) { // PDF 無固定欄位座標，只用預設程式檢視
+    try { await invoke('open_file', { path }); } catch (e) { alert('開啟失敗：' + e); }
+    return;
+  }
   try {
     const data = await invoke('load_excel', { path });
     setHeader(data.header);
+    // 客戶註記存在檔名：{類型}_{11位單號}-{註記}.xlsx
+    const m = path.split(/[\\/]/).pop().match(/^.+?_\d{11}-(.+)\.xlsx?$/);
+    document.getElementById('custNote').value = m ? m[1] : '';
     rows = data.rows;
     render();
   } catch (e) { alert('載入失敗：' + e); }
 }
 
-async function loadHistory() {
-  historyList = await invoke('read_history');
+// 歷史：預設最近 10 筆，可「顯示更多」或依日期查看更早的
+let histShown = 10;
+async function loadHistory() { historyList = await invoke('read_history'); renderHistory(); }
+function renderHistory() {
+  const d = document.getElementById('histDate').value;
+  const list = d ? historyList.filter(i => i.time.startsWith(d)) : historyList;
   const tbody = document.getElementById('history');
   tbody.innerHTML = '';
-  historyList.forEach(item => {
+  (d ? list : list.slice(0, histShown)).forEach(item => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="link">${item.file}</td><td>${item.time}</td>`;
+    tr.innerHTML = `<td class="link">${esc(item.file)}</td><td>${esc(item.time)}</td>`;
     tr.querySelector('.link').onclick = () => invoke('open_file', { path: item.path });
     tbody.appendChild(tr);
   });
+  document.getElementById('histMore').style.display = !d && list.length > histShown ? '' : 'none';
 }
+function histMore() { histShown += 10; renderHistory(); }
+function histClear() { document.getElementById('histDate').value = ''; histShown = 10; renderHistory(); }
 
 // ---- 列印（照 Example 版面，預設橫式）----
 function toMinguo(s) { const p = (s || '').split('-'); return p.length === 3 ? `${parseInt(p[0], 10) - 1911}/${p[1]}/${p[2]}` : s; }
@@ -285,11 +317,11 @@ function printDoc() {
         <span class="doc-company">${esc(h.myCompany)}</span>
         <span class="doc-meta">${esc(h.myAddress)}<br>TEL:${esc(h.myPhone)} FAX:${esc(h.myFax)}</span>
       </div>
-      <div class="doc-title">請款單</div>
+      <div class="doc-title">${esc(h.docType)}</div>
       <table class="doc-info">
         <tr><td>客戶名稱：${esc(h.custName)}</td><td>出貨日期：${toMinguo(h.orderDate)}</td></tr>
         <tr><td>電　　話：${esc(h.custPhone)}</td><td>貨單編號：${esc(h.orderNo)}</td></tr>
-        <tr><td>地　　址：${esc(h.custShipAddr)}</td><td>收訖摘要：</td></tr>
+        <tr><td>${esc(h.custAddrType || '客戶地址')}：${esc(h.custShipAddr)}</td><td>收訖摘要：</td></tr>
       </table>
       <table class="doc-table">
         <thead><tr><th>項目編號</th><th>品名規格</th><th>數量</th><th>單價</th><th>小計</th><th>備註</th></tr></thead>
@@ -319,4 +351,4 @@ loadMyInfo();
 loadStamp();
 addRow();
 loadHistory();
-computeOrderNo('請款單').then(no => (document.getElementById('orderNo').value = no)); // 預覽下一號
+refreshOrderNo(); // 預覽下一號

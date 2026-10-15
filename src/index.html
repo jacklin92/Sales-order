@@ -20,7 +20,11 @@
     <section class="card">
       <h2>單據資訊</h2>
       <div class="grid">
-        <label>銷貨單號 <span class="req">*</span>
+        <label>單據類型
+          <select id="docType" onchange="refreshOrderNo()">
+            <option>報價單</option><option>請款單</option><option selected>銷貨單</option>
+          </select><span class="err"></span></label>
+        <label>單據編號 <span class="req">*</span>
           <input id="orderNo" /><span class="err" id="err-orderNo"></span></label>
         <label>銷貨日期 <span class="req">*</span>
           <input id="orderDate" type="date" /><span class="err" id="err-orderDate"></span></label>
@@ -53,7 +57,11 @@
         <label>聯絡人 <input id="custContact" /><span class="err"></span></label>
         <label>業務員 <input id="custSales" /><span class="err"></span></label>
         <label>客戶電話 <input id="custPhone" /><span class="err"></span></label>
-        <label class="wide">送貨地址 <input id="custShipAddr" /><span class="err"></span></label>
+        <label>客戶註記 <input id="custNote" placeholder="存檔時加在單號後：單號-註記" /><span class="err"></span></label>
+        <div class="wide addr-row">
+          <select id="custAddrType"><option>公司地址</option><option>安裝地址</option><option selected>客戶地址</option></select>
+          <input id="custShipAddr" />
+        </div>
       </div>
     </section>
 
@@ -88,9 +96,11 @@
     </section>
 
     <div class="actions">
-      <button onclick="loadFile()">載入舊檔</button>
-      <button class="primary" onclick="save()">輸出銷貨單</button>
-      <button class="primary" onclick="saveInvoice()">輸出請款單</button>
+      <button onclick="loadFile()">開啟舊檔</button>
+      <label class="fmt">輸出格式
+        <select id="outFormat"><option value="excel">Excel 檔案</option><option value="pdf">PDF 檔案</option></select>
+      </label>
+      <button class="primary" onclick="saveDoc()">儲存檔案</button>
       <span class="print-ctl">
         紙張
         <select id="paperSize"><option>A5</option><option>A4</option></select>
@@ -105,10 +115,15 @@
 
     <section class="card">
       <h2>歷史輸出檔（點檔名直接開啟）</h2>
+      <div class="hist-ctl">
+        查看日期 <input type="date" id="histDate" onchange="renderHistory()" />
+        <button onclick="histClear()">顯示最近</button>
+      </div>
       <table id="historyTable">
         <thead><tr><th>檔名</th><th>輸出時間</th></tr></thead>
         <tbody id="history"></tbody>
       </table>
+      <button id="histMore" onclick="histMore()">顯示更多</button>
     </section>
   </div>
 
@@ -128,18 +143,19 @@
       <h3>使用說明</h3>
       <ol class="help">
         <li><b>我方資訊</b>：填寶號、電話、傳真、地址，設定一次即可，輸出後會自動記住，下次開啟自動帶入。</li>
-        <li><b>客戶資訊</b>：填客戶名稱（必填）、電話、送貨地址、業務員（會印為「經辦人」）。</li>
+        <li><b>客戶資訊</b>：填客戶名稱（必填）、電話、業務員（會印為「經辦人」）；地址前可選公司地址、安裝地址或客戶地址；「客戶註記」會加在存檔檔名上（單號-註記）。</li>
+        <li><b>單據類型</b>：可選報價單、請款單、銷貨單，三種各自獨立編號，標題同步改變。</li>
         <li><b>新增明細</b>：按「＋ 新增一項」。序號自動編；品名、單位為下拉選單。</li>
         <li><b>品名／尺寸</b>：品名可從下拉選取，也可直接輸入自訂品名；尺寸（如 50*260）可選尺寸單位（cm、mm 等，可按「編輯尺寸單位」自訂），會接在品名後輸出。</li>
         <li><b>備註與公司章</b>：備註印在明細右側備註欄；公司章選圖檔後會記住，輸出 Excel 與列印時加在右下角。</li>
         <li><b>維護清單</b>：按「編輯品項／編輯單位」可新增或刪除下拉內容（每行一項，儲存即生效）。</li>
         <li><b>稅別</b>：明細下方「營業稅」可選應稅（5%）、零稅率、免稅；後兩者稅額為 0，Excel 與列印的稅額欄標籤會同步改為「零稅率」或「免稅」。</li>
         <li><b>填數量單價</b>：可用鍵盤 <b>Tab</b> 逐格往右／往下移動。小計、營業稅（5%）、總計即時自動計算。</li>
-        <li><b>單號</b>：自動依「存檔資料夾」內的現有檔案分型別（銷貨單／請款單）編號，刪掉某號會自動補回該空號。</li>
-        <li><b>輸出</b>：按「輸出銷貨單」或「輸出請款單」，選存檔位置（會記住上次資料夾）。兩種單號各自獨立。</li>
-        <li><b>載入舊檔</b>：選先前輸出的 xlsx，自動還原表頭與明細，可續編後再輸出。</li>
+        <li><b>單號</b>：自動依「存檔資料夾」內的現有檔案分型別（報價單／請款單／銷貨單）編號，刪掉某號會自動補回該空號。</li>
+        <li><b>儲存檔案</b>：先選「輸出格式」。Excel 會選存檔位置（記住上次資料夾）；PDF 會開啟列印視窗，印表機請選「Microsoft Print to PDF」或「另存為 PDF」，檔名預設為單號-註記。</li>
+        <li><b>開啟舊檔</b>：選先前輸出的 xlsx，自動還原表頭與明細，可續編後再輸出；選 PDF 則以系統預設程式開啟檢視。</li>
         <li><b>列印</b>：右下選紙張與方向（預設橫式），按「列印」。</li>
-        <li><b>歷史輸出</b>：點清單中的檔名，直接以 Excel 開啟該檔。</li>
+        <li><b>歷史輸出</b>：預設顯示最近 10 筆，按「顯示更多」看更早的，或用「查看日期」挑某一天；點檔名直接以 Excel 開啟。PDF 由列印視窗另存，不會列入歷史。</li>
       </ol>
       <div class="modal-act"><button class="primary" onclick="closeHelp()">關閉</button></div>
     </div>

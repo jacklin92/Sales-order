@@ -115,3 +115,14 @@ button.primary:hover { background: #67e8f9; color: #042029; }
 .stamp-row { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 700; color: var(--muted); }
 #stampPreview { height: 48px; background: #fff; border-radius: 3px; display: none; }
 textarea.full { width: 100%; resize: vertical; }
+
+/* 單據類型、地址類型、輸出格式、歷史查詢 */
+.grid label select { display: block; width: 100%; margin-top: 4px; }
+.addr-row { display: flex; gap: 8px; }
+.addr-row select { width: 130px; }
+.addr-row input { flex: 1; }
+.fmt { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+td input.nm-in { min-width: 300px; }
+td input.size { width: 110px; }
+.hist-ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; color: var(--muted); }
+#histMore { margin-top: 10px; }

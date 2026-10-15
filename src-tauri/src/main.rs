@@ -28,6 +28,10 @@ struct Header {
     #[serde(default)]
     stamp: String, // 公司章圖檔路徑，空字串表示不加
     #[serde(default)]
+    doc_type: String, // 報價單／請款單／銷貨單；空值或未知視為銷貨單
+    #[serde(default)]
+    cust_addr_type: String, // 公司地址／安裝地址／客戶地址；空值視為客戶地址
+    #[serde(default)]
     tax_type: String, // taxable 應稅5% / zero 零稅率 / exempt 免稅；空值視為應稅
 }
 
@@ -44,14 +48,13 @@ struct Row {
     price: f64,
 }
 
-#[tauri::command]
-fn save_excel(header: Header, rows: Vec<Row>, path: String) -> Result<(), String> {
-    write_form("銷貨單", &header, &rows, &path)
-}
+const DOC_TYPES: [&str; 3] = ["報價單", "請款單", "銷貨單"];
+const ADDR_TYPES: [&str; 3] = ["公司地址", "安裝地址", "客戶地址"];
 
 #[tauri::command]
-fn save_invoice(header: Header, rows: Vec<Row>, path: String) -> Result<(), String> {
-    write_form("請款單", &header, &rows, &path)
+fn save_form(header: Header, rows: Vec<Row>, path: String) -> Result<(), String> {
+    let title = DOC_TYPES.iter().find(|t| **t == header.doc_type).unwrap_or(&"銷貨單");
+    write_form(title, &header, &rows, &path)
 }
 
 // 西元 YYYY-MM-DD 轉民國 yyy/mm/dd；解析失敗則原樣回傳
@@ -78,7 +81,11 @@ fn edge(sheet: &mut umya::Worksheet, coord: (u32, u32), side: &str, style: &str)
         "l" => b.get_left_mut(),
         _ => b.get_right_mut(),
     };
+    black_side(bd, style);
+}
+fn black_side(bd: &mut Border, style: &str) {
     bd.set_border_style(style);
+    bd.get_color_mut().set_argb("FF000000");
 }
 fn num_int(n: f64) -> String {
     if n.fract() == 0.0 { format!("{}", n as i64) } else { format!("{n}") }
@@ -136,12 +143,13 @@ fn write_form(title: &str, header: &Header, rows: &[Row], path: &str) -> Result<
     sheet.add_merge_cells("H3:J3");
 
     // 抬頭區：左 客戶名稱/電話/地址，右 出貨日期/貨單編號/收訖摘要
+    let addr_label = format!("{}:", ADDR_TYPES.iter().find(|t| **t == header.cust_addr_type).unwrap_or(&"客戶地址"));
     let labels: [(u32, u32, &str, &str, f64); 7] = [
         (2, 4, "客戶名稱:", F_LABEL, 12.0),
         (9, 4, "出貨日期:", F_DATE, 9.0),
         (2, 5, "電    話:", F_LABEL, 12.0),
         (9, 5, "貨單編號:", F_DATE, 9.0),
-        (2, 6, "地    址:", F_LABEL, 12.0),
+        (2, 6, addr_label.as_str(), F_LABEL, 12.0),
         (9, 6, "收訖摘要:", F_DATE, 9.0),
         (6, 6, "發票:", F_BODY, 12.0),
     ];
@@ -318,6 +326,12 @@ fn load_excel(path: String) -> Result<serde_json::Value, String> {
         order_date: from_minguo(&g(3, 9)),
         cust_tax_id: String::new(),
         cust_contact: String::new(),
+        doc_type: DOC_TYPES.iter().find(|t| **t == g(2, 4).trim()).unwrap_or(&"銷貨單").to_string(),
+        cust_addr_type: ADDR_TYPES
+            .iter()
+            .find(|t| g(5, 1).trim().trim_end_matches(':').trim_end_matches('：') == **t)
+            .unwrap_or(&"客戶地址")
+            .to_string(),
         remark: g(7, 8).trim().to_string(),
         stamp: String::new(),
         tax_type: match g(14, 5).trim() {
@@ -374,10 +388,10 @@ fn set_s(sheet: &mut umya::Worksheet, coord: (u32, u32), v: &str) {
 }
 fn thin_border(sheet: &mut umya::Worksheet, coord: (u32, u32)) {
     let b = sheet.get_cell_mut(coord).get_style_mut().get_borders_mut();
-    b.get_top_mut().set_border_style(Border::BORDER_THIN);
-    b.get_bottom_mut().set_border_style(Border::BORDER_THIN);
-    b.get_left_mut().set_border_style(Border::BORDER_THIN);
-    b.get_right_mut().set_border_style(Border::BORDER_THIN);
+    black_side(b.get_top_mut(), Border::BORDER_THIN);
+    black_side(b.get_bottom_mut(), Border::BORDER_THIN);
+    black_side(b.get_left_mut(), Border::BORDER_THIN);
+    black_side(b.get_right_mut(), Border::BORDER_THIN);
 }
 fn border_range(sheet: &mut umya::Worksheet, c1: u32, r1: u32, c2: u32, r2: u32) {
     for col in c1..=c2 {
@@ -458,9 +472,12 @@ fn next_seq(dir: String, label: String, prefix: String) -> u32 {
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
             if let Some(rest) = name.strip_prefix(&head) {
-                if let Some(num) = rest.strip_suffix(".xlsx") {
-                    if num.len() == 3 {
-                        if let Ok(n) = num.parse::<u32>() {
+                // 檔名：{類型}_{日期}{3位流水號}[-客戶註記].xlsx
+                if let Some(stem) = rest.strip_suffix(".xlsx") {
+                    let digits: String = stem.chars().take(3).collect();
+                    let tail = &stem[digits.len()..];
+                    if digits.len() == 3 && (tail.is_empty() || tail.starts_with('-')) {
+                        if let Ok(n) = digits.parse::<u32>() {
                             used.insert(n);
                         }
                     }
@@ -479,8 +496,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            save_excel,
-            save_invoice,
+            save_form,
             load_excel,
             next_seq,
             append_history,
