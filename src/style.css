@@ -126,3 +126,30 @@ td input.nm-in { min-width: 300px; }
 td input.size { width: 110px; }
 .hist-ctl { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; color: var(--muted); }
 #histMore { margin-top: 10px; }
+
+/* 成本與毛利頁 */
+.cost-info { color: var(--muted); line-height: 1.8; }
+.cost-info b { color: var(--txt); }
+.cost-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.cost-sum div { background: #1b2533; border: 1px solid var(--line); padding: 10px 12px; color: var(--muted); }
+.cost-sum b { display: block; font-size: 20px; color: var(--txt); margin-top: 4px; }
+.cost-sum b.loss { color: #ff8a8a; }
+.pie-wrap { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.lg { display: flex; align-items: center; gap: 8px; margin: 5px 0; color: var(--txt); }
+.lg i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.lg span { margin-left: 12px; color: var(--muted); }
+.muted { color: var(--muted); }
+
+/* 進貨成本頁：版面同銷貨頁（黑灰），只把重點色換成艷紫＋水藍漸層 */
+body.cost {
+  --grad: linear-gradient(135deg, #6d4aa8, #3f8fa5);
+  --accent: #a992d6; --accent-dim: #5b3f93;
+}
+body.cost h1 { background: linear-gradient(135deg, #b9a3e6, #7cc4d6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+body.cost h1::before { color: var(--accent); }
+body.cost .apphead::after { background: var(--grad); }
+body.cost button.primary { background: var(--grad); border-color: transparent; color: var(--txt); }
+body.cost button.primary:hover { filter: brightness(1.1); background: var(--grad); color: var(--txt); }
+button.nav.on { border-color: var(--accent); color: var(--accent); }
+.agg-ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); }
+#poMore { margin-top: 10px; }

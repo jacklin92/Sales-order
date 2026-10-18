@@ -458,6 +458,42 @@ fn read_file(path: String) -> Result<tauri::ipc::Response, String> {
     std::fs::read(path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
 }
 
+// 內部資料表（進貨單 purchases、銷貨摘要 sales）：app 資料夾 {name}.json，{ key: {...} }
+// 檔案損毀時回報錯誤，避免覆蓋既有資料
+fn store_path(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathBuf, String> {
+    if !["purchases", "sales"].contains(&name) {
+        return Err("未知的資料表".into());
+    }
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(format!("{name}.json")))
+}
+fn load_store(path: &std::path::Path) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    if !path.exists() {
+        return Ok(Default::default());
+    }
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&text).map_err(|e| format!("資料檔損毀：{e}"))
+}
+
+#[tauri::command]
+fn read_store(app: tauri::AppHandle, name: String) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    load_store(&store_path(&app, &name)?)
+}
+
+// data 為 None 表示刪除該筆
+#[tauri::command]
+fn write_store(app: tauri::AppHandle, name: String, key: String, data: Option<serde_json::Value>) -> Result<(), String> {
+    let path = store_path(&app, &name)?;
+    let mut all = load_store(&path)?;
+    match data {
+        Some(v) => { all.insert(key, v); }
+        None => { all.remove(&key); }
+    }
+    let text = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn open_file(path: String) -> Result<(), String> {
     open::that(path).map_err(|e| e.to_string())
@@ -495,6 +531,8 @@ fn next_seq(dir: String, label: String, prefix: String) -> u32 {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             save_form,
             load_excel,
@@ -502,6 +540,8 @@ fn main() {
             append_history,
             read_history,
             read_file,
+            read_store,
+            write_store,
             open_file
         ])
         .run(tauri::generate_context!())

@@ -10,13 +10,17 @@
 <body>
   <div id="app" class="no-print">
     <div class="apphead">
-      <h1>通用銷貨明細系統</h1>
+      <h1 id="appTitle">通用銷貨明細系統</h1>
       <span>
+        <button id="navSales" class="nav on" onclick="showPage('sales')">銷貨單據</button>
+        <button id="navCost" class="nav" onclick="showPage('cost')">進貨成本與毛利</button>
+        <button onclick="checkUpdate(true)">檢查更新</button>
         <button onclick="openTheme()">外觀</button>
         <button onclick="showHelp()">使用說明</button>
       </span>
     </div>
 
+    <div id="salesPage">
     <section class="card">
       <h2>單據資訊</h2>
       <div class="grid">
@@ -125,6 +129,80 @@
       </table>
       <button id="histMore" onclick="histMore()">顯示更多</button>
     </section>
+    </div>
+
+    <div id="costPage" style="display:none">
+      <section class="card">
+        <h2>進貨單資訊</h2>
+        <div class="grid">
+          <label>進貨單號 <input id="poNo" readonly /></label>
+          <label>進貨日期 <input id="poDate" type="date" onchange="setPoField('date', this.value)" /></label>
+          <label>廠商 <span class="req">*</span>
+            <input id="poVendor" list="vendorDL" oninput="setPoField('vendor', this.value)" /></label>
+          <label>對應銷貨單（選填）
+            <select id="poLink" onchange="setPoField('link', this.value)"></select></label>
+        </div>
+        <div id="poLinkInfo" class="cost-info"></div>
+        <datalist id="vendorDL"></datalist>
+      </section>
+
+      <section class="card">
+        <div class="row-head">
+          <h2>進貨明細</h2>
+          <span>
+            <button onclick="addPoRow()">＋ 新增一項</button>
+            <button onclick="editList('vendors')">編輯廠商</button>
+            <button onclick="editList('costCats')">編輯類別</button>
+            <button onclick="editList('units')">編輯單位</button>
+          </span>
+        </div>
+        <table id="poGrid">
+          <thead>
+            <tr><th>序號</th><th>類別</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th></th></tr>
+          </thead>
+          <tbody id="poRows"></tbody>
+          <tfoot>
+            <tr><td colspan="6" class="right">進貨總額</td><td class="right" id="pSumAmount">0</td><td></td></tr>
+            <tr><td colspan="6" class="right">營業稅
+              <select id="pTaxType" onchange="setPoField('taxType', this.value)"><option value="taxable">應稅（5%）</option><option value="zero">零稅率</option><option value="exempt">免稅</option></select></td>
+              <td class="right" id="pSumTax">0</td><td></td></tr>
+            <tr><td colspan="6" class="right">總計</td><td class="right" id="pSumTotal">0</td><td></td></tr>
+          </tfoot>
+        </table>
+      </section>
+
+      <div class="actions">
+        <button class="primary" onclick="savePo()">儲存進貨單</button>
+        <button onclick="addPo()">新增進貨單</button>
+        <button onclick="delPo()">刪除此進貨單</button>
+        <button onclick="showPage('sales')">返回銷貨單據</button>
+      </div>
+
+      <section class="card">
+        <h2>進貨彙總與毛利</h2>
+        <div class="agg-ctl">
+          日期
+          <input type="date" id="aFrom" onchange="aggChanged()" /> ～ <input type="date" id="aTo" onchange="aggChanged()" />
+          <button onclick="aggClear()">全部</button>
+          圓餅分組
+          <select id="aBy" onchange="renderAgg()"><option value="cat">依類別</option><option value="vendor">依廠商</option><option value="name">依品名</option></select>
+          圓餅內容
+          <select id="aMode" onchange="renderAgg()"><option value="cost">進貨組成</option><option value="profit">進貨組成＋毛利（僅已對應銷貨單）</option></select>
+        </div>
+        <div id="aSum" class="cost-sum"></div>
+        <div id="aNote" class="cost-info"></div>
+        <div class="pie-wrap"><div id="pie"></div><div id="pieLegend"></div></div>
+      </section>
+
+      <section class="card">
+        <h2>進貨單清單（點單號編輯）</h2>
+        <table>
+          <thead><tr><th>進貨單號</th><th>日期</th><th>廠商</th><th>進貨總額（未稅）</th><th>對應銷貨單</th></tr></thead>
+          <tbody id="poList"></tbody>
+        </table>
+        <button id="poMore" onclick="poMore()">顯示更多</button>
+      </section>
+    </div>
   </div>
 
   <div id="themeModal" class="modal no-print">
@@ -155,6 +233,8 @@
         <li><b>儲存檔案</b>：先選「輸出格式」。Excel 會選存檔位置（記住上次資料夾）；PDF 會開啟列印視窗，印表機請選「Microsoft Print to PDF」或「另存為 PDF」，檔名預設為單號-註記。</li>
         <li><b>開啟舊檔</b>：選先前輸出的 xlsx，自動還原表頭與明細，可續編後再輸出；選 PDF 則以系統預設程式開啟檢視。</li>
         <li><b>列印</b>：右下選紙張與方向（預設橫式），按「列印」。</li>
+        <li><b>進貨單與毛利</b>：按上方「進貨成本與毛利」切換頁面（內部用，不會輸出或列印；版面同銷貨頁，重點色改為艷紫＋水藍漸層以便區分）。一張進貨單填一家廠商與多個品項（類別、品名、數量、單價），營業稅可選應稅、零稅率、免稅；「對應銷貨單」可選填，從已儲存過的銷貨單挑選。離開頁面時，完整的進貨單會自動儲存。</li>
+        <li><b>進貨彙總</b>：進貨頁下方可選日期區間，加總區間內所有進貨單，依類別、廠商或品名看金額與占比及圓餅圖；有對應銷貨單的部分另算毛利與毛利率。點清單中的單號可回頭編輯。銷貨摘要只從「儲存檔案」開始記錄，更早的銷貨單無法被選為對應對象。</li>
         <li><b>歷史輸出</b>：預設顯示最近 10 筆，按「顯示更多」看更早的，或用「查看日期」挑某一天；點檔名直接以 Excel 開啟。PDF 由列印視窗另存，不會列入歷史。</li>
       </ol>
       <div class="modal-act"><button class="primary" onclick="closeHelp()">關閉</button></div>
